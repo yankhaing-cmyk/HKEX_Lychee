@@ -104,13 +104,40 @@ def get_universe(force_refresh: bool = False) -> pd.DataFrame:
         cached = pd.read_csv(CACHE_FILE)
         if not cached.empty and cached["cache_date"].iloc[0] == str(date.today()):
             log.info(f"using cached universe ({len(cached)} stocks)")
+            cached["symbol"] = cached["symbol"].astype(str)
+            _populate_name_map(cached)
             return cached
 
     rows = _scan_request(u["min_price"], u["min_avg_value_myr"], u["max_stocks"])
     df = pd.DataFrame(rows)
+    df["symbol"] = df["symbol"].astype(str)
     df["cache_date"] = str(date.today())
     df.to_csv(CACHE_FILE, index=False)
+    _populate_name_map(df)
     return df
+
+
+# ---------------------------------------------------------------- company names
+_NAME_MAP: dict[str, str] = {}
+
+
+def _populate_name_map(df: pd.DataFrame):
+    global _NAME_MAP
+    if "description" in df.columns:
+        _NAME_MAP = dict(zip(df["symbol"].astype(str),
+                             df["description"].fillna("").astype(str)))
+
+
+def get_name_map() -> dict[str, str]:
+    """symbol -> company name. Loads from today's universe cache if this
+    process hasn't populated the map yet (e.g. standalone review runs)."""
+    global _NAME_MAP
+    if not _NAME_MAP and os.path.exists(CACHE_FILE):
+        try:
+            _populate_name_map(pd.read_csv(CACHE_FILE))
+        except Exception:
+            pass
+    return _NAME_MAP
 
 
 def prefilter_candidates(universe: pd.DataFrame) -> list[str]:

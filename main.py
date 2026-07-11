@@ -36,7 +36,9 @@ def build_charts(hits: dict, data: dict) -> dict[str, list[tuple[str, str]]]:
             label = "".join(ch for ch in label if ord(ch) < 128).strip().upper()
             path = make_chart(df, sym, label, r, bars=config.CHARTS["bars"])
             if path:
-                caption = (f"<b>{sym}</b>  {config.CURRENCY}{r['close']} | RSI {r['rsi']} | "
+                nm = (r.get("name") or "").strip()
+                nm_part = f" · {nm[:30]}" if nm else ""
+                caption = (f"<b>{sym}</b>{nm_part}  {config.CURRENCY}{r['close']} | RSI {r['rsi']} | "
                            f"ADX {r['adx']} | Vol {r['vol_ratio']}x | "
                            f"ROC10 {r['roc10']}%")
                 items.append((path, caption))
@@ -53,14 +55,25 @@ def run_scan(dry_run: bool = False, trigger: str = "scheduled"):
     print(f"Data OK for {stocks_screened} symbols. Screening...")
     hits = scan(data)
 
+    # attach company names (from the universe scanner data) to every hit
+    try:
+        from universe import get_name_map
+        names = get_name_map()
+        for rows in hits.values():
+            for r in rows:
+                r["name"] = names.get(str(r["symbol"]), "")
+    except Exception:
+        pass
+
     total = sum(len(v) for v in hits.values())
     scan_date = datetime.now().strftime("%d %b %Y %H:%M")
 
     # mark which hits are NEW (not alerted in the last 7 days), then log them
-    from signal_log import mark_new_in_hits, append_signals
+    from signal_log import mark_new_in_hits, append_signals, load_log
+    log_was_empty = load_log().empty
     hits = mark_new_in_hits(hits)
     n_logged, n_new = append_signals(hits)
-    print(f"Signal log: {n_logged} logged, {n_new} new")
+    print(f"Signal log: {n_logged} logged, {n_new} new (log empty before scan: {log_was_empty})")
 
     if dry_run:
         print(format_scan_results(hits, scan_date, stocks_screened)
@@ -73,6 +86,17 @@ def run_scan(dry_run: bool = False, trigger: str = "scheduled"):
     else:
         ok = send_scan_results(hits, scan_date, stocks_screened)
         print(f"Telegram sent: {ok} ({stocks_screened} screened, {total} total hits)")
+        if log_was_empty and total > 0:
+            from telegram_bot import send_message
+            send_message(
+                "⚠️ <b>Signal log was empty at scan time.</b>\n"
+                "If this is not the first-ever run, the log isn't persisting "
+                "between runs — every stock will show as 🆕 and the "
+                "'Still valid' list will stay empty.\n"
+                "Check: repo Settings → Actions → General → Workflow "
+                "permissions = <b>Read and write</b>, and the "
+                "'Commit signal log' step in the Actions run log."
+            )
         if config.CHARTS["enabled"] and total:
             print("Rendering charts...")
             charts = build_charts(hits, data)

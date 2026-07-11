@@ -71,12 +71,16 @@ def make_chart(df: pd.DataFrame, symbol: str, strategy_label: str,
             axv.plot(x, d["vol_avg20"] / 1e6, color="#5d4037", lw=1.3,
                      ls="--", label="20-day avg volume")
 
-        # ---- title with the key stats ----
-        title = (f"{symbol}  |  {strategy_label}  |  "
+        # ---- title with company name + the key stats ----
+        name = (stats.get("name") or "").strip()
+        # matplotlib's default font can't render CJK glyphs; keep ASCII only
+        name_ascii = "".join(ch for ch in name if ord(ch) < 128).strip()
+        head = f"{symbol}" + (f"  ·  {name_ascii[:45]}" if name_ascii else "")
+        title = (f"{head}\n{strategy_label}  |  "
                  f"{config.CURRENCY}{stats.get('close', '?')}   RSI {stats.get('rsi', '?')}   "
                  f"ADX {stats.get('adx', '?')}   Vol {stats.get('vol_ratio', '?')}x   "
                  f"ROC10 {stats.get('roc10', '?')}%")
-        ax.set_title(title, fontsize=11, loc="left", pad=10, fontweight="bold")
+        ax.set_title(title, fontsize=10.5, loc="left", pad=10, fontweight="bold")
 
         ax.legend(loc="upper left", fontsize=8, frameon=False)
         axv.legend(loc="upper left", fontsize=8, frameon=False)

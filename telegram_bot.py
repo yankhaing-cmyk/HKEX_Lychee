@@ -32,6 +32,14 @@ def send_message(text: str) -> bool:
         return False
 
 
+def _hit_line(r: dict) -> str:
+    nm = (r.get("name") or "").strip()
+    nm = f" {nm[:26]}" if nm else ""
+    return (f"    • <b>{r['symbol']}</b>{nm}  {config.CURRENCY}{r['close']}"
+            f" | RSI {r['rsi']} | ADX {r['adx']}"
+            f" | Vol {r['vol_ratio']}x | ROC10 {r['roc10']}%")
+
+
 def format_scan_results(hits: dict[str, list[dict]], scan_date: str,
                         stocks_screened: int | None = None) -> str:
     lines = [f"<b>{config.MARKET_FLAG} {config.MARKET_NAME} Screener — {scan_date}</b>"]
@@ -49,13 +57,24 @@ def format_scan_results(hits: dict[str, list[dict]], scan_date: str,
             continue
         any_hit = True
         lines.append(f"<b>{STRATEGY_LABELS.get(strat, strat)}</b>")
-        for r in rows:
-            badge = "🆕 " if r.get("is_new") else ""
-            lines.append(
-                f"  • {badge}<b>{r['symbol']}</b>  {config.CURRENCY}{r['close']}"
-                f" | RSI {r['rsi']} | ADX {r['adx']}"
-                f" | Vol {r['vol_ratio']}x | ROC10 {r['roc10']}%"
-            )
+
+        # rows without an is_new flag (e.g. log unavailable) -> treat as new
+        new_rows = [r for r in rows if r.get("is_new") in (True, None)]
+        old_rows = [r for r in rows if r.get("is_new") is False]
+
+        if new_rows:
+            lines.append("  🆕 <b>New today:</b>")
+            for r in new_rows:
+                lines.append(_hit_line(r))
+        if old_rows:
+            # compact: symbol + short name, wrapped to keep lines readable
+            def _short(r):
+                nm = (r.get("name") or "").strip().split(" - ")[0]
+                return f"{r['symbol']} {nm[:16]}".strip() if nm else str(r["symbol"])
+            syms = [_short(r) for r in old_rows]
+            lines.append(f"  ♻️ <b>Still valid ({len(syms)}):</b>")
+            for i in range(0, len(syms), 4):
+                lines.append("    " + " · ".join(syms[i:i + 4]))
         lines.append("")
     if not any_hit:
         lines.append("No stocks matched any strategy today.")
