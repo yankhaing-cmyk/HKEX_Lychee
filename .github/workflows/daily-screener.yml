@@ -1,0 +1,90 @@
+name: Daily Bursa Screener
+
+# ----------------------------------------------------------------------
+# Schedules (cron is UTC; MYT = UTC+8):
+#   09:15 UTC Mon-Fri = 17:15 MYT  -> daily scan after Bursa close
+#   01:00 UTC Sat     = 09:00 MYT  -> weekly signal performance review
+# workflow_dispatch lets the Telegram worker (or the Actions tab) trigger
+# either mode on demand via the "mode" input.
+# ----------------------------------------------------------------------
+on:
+  schedule:
+    - cron: "15 9 * * 1-5"     # daily scan
+    - cron: "0 1 * * 6"        # Saturday weekly review
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "scan or review"
+        required: false
+        default: "scan"
+
+# Needed so the workflow can commit signals.csv back to the repo
+permissions:
+  contents: write
+
+concurrency:
+  group: bursa-screener
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # full-market scan (~1000 stocks) needs the headroom
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Decide mode (scan or review)
+        id: mode
+        run: |
+          MODE="scan"
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ github.event.schedule }}" = "0 1 * * 6" ]; then
+            MODE="review"
+          fi
+          if [ -n "${{ github.event.inputs.mode }}" ]; then
+            MODE="${{ github.event.inputs.mode }}"
+          fi
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "Running in mode: $MODE"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run screener
+        if: steps.mode.outputs.mode == 'scan'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
+
+      - name: Run weekly review
+        if: steps.mode.outputs.mode == 'review'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python review.py
+
+      - name: Commit signal log back to repo
+        if: steps.mode.outputs.mode == 'scan'
+        run: |
+          git config user.name "bursa-screener-bot"
+          git config user.email "actions@github.com"
+          if [ -f signals_myx.csv ]; then
+            git add signals_myx.csv
+            if ! git diff --cached --quiet; then
+              git commit -m "signal log: $(date -u +'%Y-%m-%d %H:%M') UTC"
+              git pull --rebase origin ${{ github.ref_name }} || true
+              git push
+            else
+              echo "No new signals to commit."
+            fi
+          fi
