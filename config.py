@@ -79,18 +79,31 @@ UNIVERSE = {
     "max_workers": 8,              # parallel history downloads
 }
 
-# Fallback watchlist — used when USE_FULL_MARKET = False or the scanner
-# API is unreachable.
-WATCHLIST = [
-    "MAYBANK", "PBBANK", "CIMB", "TENAGA", "PCHEM", "IHH", "PMETAL",
-    "TM", "MRDIY", "SIMEPLT", "GAMUDA", "YTLPOWR", "YTL", "AXIATA",
-    "CDB", "SUNWAY", "IOICORP", "KLK", "HLBANK", "RHBBANK", "MISC",
-    "PETGAS", "PETDAG", "GENTING", "GENM", "MAXIS", "DIALOG", "INARI",
-    "VITROX", "GREATEC", "FRONTKN", "UNISEM", "MPI", "D&O", "SKPRES",
-    "PENTA", "GTRONIC", "KGB", "HARTA", "TOPGLOV", "KOSSAN", "SUPERMX",
-    "AIRPORT", "CAPITALA", "WPRTS", "BIMB", "AMBANK", "MBSB", "EKOVEST",
-    "IJM", "KERJAYA", "HIBISCS",
-]
+# Fallback watchlists — used when USE_FULL_MARKET = False or the scanner
+# API is unreachable. STRICTLY per-market: an HKEX run can only ever fall
+# back to HK symbols, never Bursa ones (and vice versa).
+WATCHLISTS = {
+    "MYX": [
+        "MAYBANK", "PBBANK", "CIMB", "TENAGA", "PCHEM", "IHH", "PMETAL",
+        "TM", "MRDIY", "SIMEPLT", "GAMUDA", "YTLPOWR", "YTL", "AXIATA",
+        "CDB", "SUNWAY", "IOICORP", "KLK", "HLBANK", "RHBBANK", "MISC",
+        "PETGAS", "PETDAG", "GENTING", "GENM", "MAXIS", "DIALOG", "INARI",
+        "VITROX", "GREATEC", "FRONTKN", "UNISEM", "MPI", "D&O", "SKPRES",
+        "PENTA", "GTRONIC", "KGB", "HARTA", "TOPGLOV", "KOSSAN", "SUPERMX",
+        "AIRPORT", "CAPITALA", "WPRTS", "BIMB", "AMBANK", "MBSB", "EKOVEST",
+        "IJM", "KERJAYA", "HIBISCS",
+    ],
+    # Large-cap HK names (TradingView HKEX symbols are plain numbers).
+    # 700 Tencent, 9988 Alibaba, 5 HSBC, 1299 AIA, 941 China Mobile,
+    # 3690 Meituan, 1810 Xiaomi, 2318 Ping An, 388 HKEX, 9618 JD, 1211 BYD...
+    "HKEX": [
+        "700", "9988", "5", "1299", "941", "3690", "1810", "2318", "388",
+        "9618", "1211", "2020", "2382", "1024", "9999", "2331", "1177",
+        "1", "16", "27", "66", "101", "883", "386", "857", "939", "1398",
+        "3988", "2628", "2688", "6862", "268", "992", "981", "1088",
+    ],
+}
+WATCHLIST = WATCHLISTS.get(MARKET, [])
 
 # ----------------------------------------------------------------------
 # CHARTS — candlestick charts sent to Telegram for every matched stock
