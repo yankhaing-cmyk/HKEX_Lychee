@@ -1,0 +1,9 @@
+# caches & generated output
+__pycache__/
+*.pyc
+universe_cache.csv
+trades_*.csv
+
+# never commit secrets
+.env
+secrets.py
